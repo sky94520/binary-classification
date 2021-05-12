@@ -1,0 +1,6 @@
+numpy==1.18.2
+pandas==0.24.2
+pytorch-pretrained-bert==0.6.2
+sklearn==0.24
+torch==1.4.0
+torchvision==0.5.0

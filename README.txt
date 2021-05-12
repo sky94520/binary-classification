@@ -1,7 +1,3 @@
 ##BERT-二分类
 ### 1.库
-> 1. numpy
-> 2.pandas
-> 3.pytorch
-> 4.sklearn
-> 5.pyotrch-pretrained-bert
+> 本示例基于pytorch开发的pytorch-pretrained-bert库，运行需要torch支持，请前往官网确定如何安装。
