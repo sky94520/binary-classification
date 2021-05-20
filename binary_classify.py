@@ -1,8 +1,10 @@
 import time
+import math
 import pandas as pd
 import numpy as np
 import torch
 from torch import nn
+from tqdm import tqdm
 from sklearn.metrics import classification_report
 from concurrent.futures import ThreadPoolExecutor
 from torch.utils.data import TensorDataset, DataLoader
@@ -105,14 +107,17 @@ def load_data(filepath, pretrained_model_name_or_path, max_seq_len, batch_size):
 
     train_iter = DataLoader(dataset=train_data, batch_size=batch_size, shuffle=True)
     test_iter = DataLoader(dataset=test_data, batch_size=batch_size, shuffle=True)
-    return train_iter, test_iter
+    # 训练和测试的样本数量
+    total_train_batch = math.ceil(len(raw_train_data) / batch_size)
+    total_test_batch = math.ceil(len(raw_test_data) / batch_size)
+    return train_iter, test_iter, total_train_batch, total_test_batch
 
 
-def evaluate_accuracy(data_iter, net, device):
+def evaluate_accuracy(data_iter, net, device, batch_count):
     # 记录预测标签和真实标签
     prediction_labels, true_labels = [], []
     with torch.no_grad():
-        for batch_data in data_iter:
+        for batch_data in tqdm(data_iter, desc='eval', total=batch_count):
             batch_data = tuple(t.to(device) for t in batch_data)
             # 获取给定的输出和模型给的输出
             labels = batch_data[-1]
@@ -126,7 +131,7 @@ def evaluate_accuracy(data_iter, net, device):
 
 if __name__ == '__main__':
     batch_size, max_seq_len = 32, 200
-    train_iter, test_iter = load_data('dianping_train_test.xls', 'bert-base-chinese', max_seq_len, batch_size)
+    train_iter, test_iter, train_batch_count, test_batch_count = load_data('dianping_train_test.xls', 'bert-base-chinese', max_seq_len, batch_size)
     # 加载模型
     # model = BertForSequenceClassification.from_pretrained('bert-base-chinese', num_labels=2)
     model = ClassifyModel('bert-base-chinese', num_labels=2, is_lock=True)
@@ -142,15 +147,16 @@ if __name__ == '__main__':
         model.train()
         # loss和精确度
         train_loss_sum, train_acc_sum, n = 0.0, 0.0, 0
-        for step, batch_data in enumerate(train_iter):
+        for step, batch_data in tqdm(enumerate(train_iter), desc='train epoch:{}/{}'.format(epoch + 1, 4)
+                                    , total=train_batch_count):
             batch_data = tuple(t.to(device) for t in batch_data)
             batch_seqs, batch_seq_masks, batch_seq_segments, batch_labels = batch_data
 
             logits = model(batch_seqs, batch_seq_masks, batch_seq_segments)
-            logits = logits.softmax(dim=1)
             loss = loss_func(logits, batch_labels)
             loss.backward()
             train_loss_sum += loss.item()
+            logits = logits.softmax(dim=1)
             train_acc_sum += (logits.argmax(dim=1) == batch_labels).sum().item()
             n += batch_labels.shape[0]
             optimizer.step()
@@ -158,7 +164,7 @@ if __name__ == '__main__':
         # 每一代都判断
         model.eval()
 
-        result = evaluate_accuracy(test_iter, model, device)
+        result = evaluate_accuracy(test_iter, model, device,test_batch_count)
         print('epoch %d, loss %.4f, train acc %.3f, time: %.3f' %
               (epoch + 1, train_loss_sum / n, train_acc_sum / n, (time.time() - start)))
         print(result)
